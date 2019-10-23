@@ -1,0 +1,14 @@
+{
+  "devDependencies": {
+    "chalk": "2.4.1"
+  },
+  "scripts": {
+    "vulkan-wrappers:build": "cls && node build PROJECT=vulkan-wrappers MODE=DEBUG",
+    "engine:build": "cls && node build PROJECT=engine MODE=DEBUG",
+    "vulkan-wrappers-test:build": "cls && node build PROJECT=vulkan-wrappers-test MODE=DEBUG",
+    "vulkan-wrappers-test:run": "cls && node build PROJECT=vulkan-wrappers-test MODE=DEBUG RUN",
+    "test-vc:build": "cls && node build PROJECT=test-vc MODE=DEBUG",
+    "test-vc:run": "cls && node build PROJECT=test-vc MODE=DEBUG RUN",
+    "test-emcc:build": "cls && node build PROJECT=test-emcc MODE=DEBUG"
+  }
+}
