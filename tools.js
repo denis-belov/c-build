@@ -36,6 +36,13 @@ const getCommandLineArgs = () => {
   return args;
 };
 
+const removeDir = (dir) => {
+  if (fs.existsSync(dir)) {
+    fs.readdirSync(dir).forEach((elm) => fs.unlinkSync(join(dir, elm)));
+    fs.rmdirSync(dir);
+  }
+};
+
 const replaceDir = (path, make_dir = true) => {
   if (fs.existsSync(path)) {
     fs.readdirSync(path).forEach((elm) => {
@@ -56,16 +63,7 @@ const replaceDir = (path, make_dir = true) => {
   }
 };
 
-const execSync = (cmd) => new Promise((resolve) => exec(cmd, { maxBuffer: 1024 * 500 }, (err, stdout, stderr) => resolve([ err, stdout /* , stderr */ ])));
-
-// const stream2uint32array = (path) => new Promise((resolve) => {
-//   const stream = fs.createReadStream(path);
-//   stream.on('data', (data) => {
-//     stream.close();
-//     // console.log(new Uint32Array(data.buffer.slice(0, data.length)));
-//     resolve(new Uint32Array(data.buffer.slice(0, data.length)));
-//   });
-// });
+const execSync = (cmd) => new Promise((resolve) => exec(cmd, { maxBuffer: 0xFFFFFFFF }, (err, stdout, stderr) => resolve([ err, stdout /* , stderr */ ])));
 
 const $ = (bin, arg = '') => {
   const name = win32.basename(bin);
@@ -83,14 +81,6 @@ const colorize = (out) => out.forEach((elm) => (!elm || elm.toString().split('\r
 })[(str.toLowerCase().match(/error|warning|note|console_log/) || [])[0]]](str)))));
 
 const parseGlsl = async (src_path, dst_path, include_files) => {
-  // const test = fs.readFileSync('E:/reps/denis-belov/c-build/test.txt');
-  // console.log(test);
-  // console.log(new Uint8Array(test));
-  // console.log(new Uint8Array(test).buffer);
-  // console.log(test.buffer);
-
-  // throw '';
-
   let files = null;
 
   if (include_files) {
@@ -103,7 +93,9 @@ const parseGlsl = async (src_path, dst_path, include_files) => {
     files = fs.readdirSync(src_path);
   }
 
-  replaceDir(dst_path);
+  if (src_path !== dst_path) {
+    replaceDir(dst_path);
+  }
 
   for (let i = 0; i < files.length; i++) {
     const src_file = join(src_path, files[i]);
@@ -120,12 +112,15 @@ const parseGlsl = async (src_path, dst_path, include_files) => {
         }
 
         const glsl_code_wrapper = match[0];
+        const glsl_code = glsl_code_wrapper.match(/\(\{[^]*?\}\)/)[0].slice(2, -2);
         const glsl_filename = glsl_code_wrapper.match(/[A-Za-z0-9_-]+.(comp|frag|geom|tesc|tese|vert)/)[0];
         const glsl_path = join(dst_path, glsl_filename);
-        const spirv_path = join(dst_path, `${ glsl_filename.split('.').pop() }.spv`);
+        // const spirv_path = join(dst_path, `${ glsl_filename.split('.').pop() }.spv`);
         let tab = 0;
 
-        fs.writeFileSync(glsl_path, glsl_code_wrapper.match(/\(\{[^]*?\}\)/)[0].slice(2, -2).split('\r').slice(1, -1).map((elm, row_index) => {
+        log(glsl_filename);
+
+        fs.writeFileSync(glsl_path, glsl_code.split('\r').slice(1, -1).map((elm, row_index) => {
           tab = tab || (elm.match(/( )+/) || [ '' ])[0].length;
           const row = elm.replace(/\n/g, '');
           const row_tab = (row.match(/( )+/) || [ '' ])[0].length;
@@ -135,24 +130,27 @@ const parseGlsl = async (src_path, dst_path, include_files) => {
         }).join('\n'));
 
         // colorize(await execSync($(join(VULKAN, 'Bin/spirv-val.exe'), spirv_path)));
-        colorize(await execSync($(join(VULKAN, 'Bin/glslangValidator.exe'), `-V -H -Os ${ glsl_path } -o ${ spirv_path } --spirv-dis`)));
+        // colorize(await execSync($(join(VULKAN, 'Bin/glslangValidator.exe'), `-V -H -Os ${ glsl_path } -o ${ spirv_path } --spirv-dis`)));
+        colorize(await execSync($(join(VULKAN, 'Bin/glslangValidator.exe'), glsl_path)));
+        fs.unlinkSync(glsl_path);
+        // fs.unlinkSync(spirv_path);
         // colorize(await execSync($(join(VULKAN, 'Bin/spirv-remap.exe'), `--map all --input ${ spirv_path } --output ${ dst_path }`)));
 
-        const arr = new Uint32Array(new Uint8Array(fs.readFileSync(spirv_path)).buffer);
-
-        file = `${ file.slice(0, match.index) }{ ${ arr } }${ file.slice(match.index + glsl_code_wrapper.length) }`;
+        // file = `${ file.slice(0, match.index) }{ ${ new Uint32Array(new Uint8Array(fs.readFileSync(spirv_path)).buffer) } }${ file.slice(match.index + glsl_code_wrapper.length) }`;
+        file = `${ file.slice(0, match.index) }${ glsl_code.trim().split('\r\n').map((elm) => `"${ elm }\\n"`).join('\n') }${ file.slice(match.index + glsl_code_wrapper.length) }`;
       }
 
-      fs.appendFileSync(dst_file, file);
+      // or append ?
+      fs.writeFileSync(dst_file, file);
     }
   }
 };
 
 module.exports = {
   getCommandLineArgs,
+  removeDir,
   replaceDir,
   execSync,
-  // stream2uint32array,
   $,
   colorize,
   parseGlsl,
