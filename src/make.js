@@ -12,7 +12,7 @@ module.exports = class Make {
 
 
 
-	constructor (ENV, dirname) {
+	constructor (ENV, dirname, options = {}) {
 
 		const {
 
@@ -33,7 +33,9 @@ module.exports = class Make {
 
 
 
-		// file extensions
+		const includes = options.includes || [];
+
+		// file extensions. RENAME!
 
 		let a;
 
@@ -64,6 +66,17 @@ module.exports = class Make {
 			case GCC_X64:  s = 's';   break;
 
 			case MSVS_X64: s = 'asm'; break;
+		}
+
+
+
+		let bin;
+
+		switch (ENV) {
+
+			case GCC_X64:  bin = 'bin'; break;
+
+			case MSVS_X64: bin = 'exe'; break;
 		}
 
 
@@ -103,9 +116,9 @@ module.exports = class Make {
 
 		switch (ENV) {
 
-			case GCC_X64:  C_COMPILER_ARG = '-c -m64 -msse3 -Ofast -funroll-loops -Wall -Wextra -Wpedantic -I $(SRC)'; break;
+			case GCC_X64:  C_COMPILER_ARG = `-c -m64 -msse3 -Ofast -funroll-loops -Wall -Wextra -Wpedantic -I $(SRC) ${ includes.map((dir) => `-I ${ dir }`).join(' ') }`; break;
 
-			case MSVS_X64: C_COMPILER_ARG = '/c /EHsc /MP999 /O2 /I$(SRC)';                                            break;
+			case MSVS_X64: C_COMPILER_ARG = `/c /EHsc /MP999 /O2 /I$(SRC) ${ includes.map((dir) => `/I${ dir }`).join(' ') }`;                                             break;
 		}
 
 
@@ -123,9 +136,9 @@ module.exports = class Make {
 
 		switch (ENV) {
 
-			case GCC_X64:  CPP_COMPILER_ARG = '-c -std=c++20 -m64 -msse3 -Ofast -funroll-loops -Wall -Wextra -Wpedantic -I $(SRC)'; break;
+			case GCC_X64:  CPP_COMPILER_ARG = `-c -std=c++20 -m64 -msse3 -Ofast -funroll-loops -Wall -Wextra -Wpedantic -I $(SRC) ${ includes.map((dir) => `-I ${ dir }`).join(' ') }`; break;
 
-			case MSVS_X64: CPP_COMPILER_ARG = '/c /std:c++20 /EHsc /MP999 /O2 /I$(SRC)';                                            break;
+			case MSVS_X64: CPP_COMPILER_ARG = `/c /std:c++20 /EHsc /MP999 /O2 /I$(SRC) ${ includes.map((dir) => `/I${ dir }`).join(' ') }`;                                             break;
 		}
 
 
@@ -143,9 +156,38 @@ module.exports = class Make {
 
 		switch (ENV) {
 
-			case GCC_X64:  BUILDER_ARG = '-r -flto';           break;
+			case GCC_X64:  BUILDER_ARG = '-r -flto'; break;
 
-			case MSVS_X64: BUILDER_ARG = '/SUBSYSTEM:CONSOLE'; break;
+			case MSVS_X64: BUILDER_ARG = '';         break;
+		}
+
+
+
+		let LINKER;
+
+		switch (ENV) {
+
+			case GCC_X64:  LINKER = 'gcc';  break;
+
+			case MSVS_X64: LINKER = 'link'; break;
+		}
+
+		let LINKER_ARG;
+
+		switch (ENV) {
+
+			case GCC_X64:  LINKER_ARG = '-flto';                                                         break;
+
+			case MSVS_X64: LINKER_ARG = '/SUBSYSTEM:CONSOLE /NODEFAULTLIB:LIBUCRT /NODEFAULTLIB:MSVCRT'; break;
+		}
+
+		let LINKER_DEFAULT_LIBS;
+
+		switch (ENV) {
+
+			case GCC_X64:  LINKER_DEFAULT_LIBS = '-l dl -l pthread -l Xrandr -l Xxf86vm -l Xi -l Xinerama -l X11 -l Xcursor'; break;
+
+			case MSVS_X64: LINKER_DEFAULT_LIBS = 'ucrt.lib gdi32.lib user32.lib shell32.lib glfw3.lib';                       break;
 		}
 
 
@@ -158,19 +200,7 @@ module.exports = class Make {
 
 			case GCC_X64:
 
-				mkdir = (dir) => {
-
-					return `mkdir -p ${ dir }`
-
-					// const folders = dir.split('/');
-
-					// return folders.map((_, index) => {
-
-					// 	const _dir = folders.slice(0, index + 1).join('/');
-
-					// 	return `mkdir -p ${ _dir }`;
-					// }).join(' && ');
-				};
+				mkdir = (dir) => `mkdir -p ${ dir }`;
 
 				break;
 
@@ -289,17 +319,29 @@ module.exports = class Make {
 
 			case GCC_X64:
 
-				this.linkStatic = (name, objects = {}/*, statics*/) => {
+				this.linkStatic = (name, options = {}) => {
+
+					const objects = options.objects || {};
+					const statics = options.statics || [];
+					const internal = objects.internal || [];
+					const external = objects.external || [];
+
+					const linked_units = [
+
+						`${ internal.map((file) => `$(BUILD)/${ ENV }/internal/${ o }/${ file }.${ o }`).join(' ') }`,
+						`${ external.map((file) => `$(BUILD)/${ ENV }/external/${ o }/${ file }.${ o }`).join(' ') }`,
+						`${ statics.map((file) => `${ file }.${ a }`).join(' ') }`,
+					].join(' ');
 
 					let out = '';
 
-					out += `$(BUILD)/${ ENV }/output/${ a }/${ name }.${ a } : ${ objects.internal ? objects.internal.map((file) => `$(BUILD)/${ ENV }/internal/${ o }/${ file }.${ o }`).join(' ') : '' }\n`;
+					out += `$(BUILD)/${ ENV }/output/${ a }/${ name }.${ a } : ${ linked_units }\n`;
 
-					out += `\t${ mkdir(`$(BUILD)/${ ENV }/output/${ a }`) } && `;
+					out += `\t${ mkdir(`$(BUILD)/${ ENV }/output/${ a }`) } && ${ mkdir(`$(BUILD)/${ ENV }/output/${ s }`) } && `;
 
-					out += `${ BUILDER } ${ objects.internal ? objects.internal.map((file) => `$(BUILD)/${ ENV }/internal/${ o }/${ file }.${ o }`).join(' ') : '' } ${ BUILDER_ARG } -o $(BUILD)/${ ENV }/output/${ a }/${ name }.${ a }`;
+					out += `${ BUILDER } ${ linked_units } ${ BUILDER_ARG } -o $(BUILD)/${ ENV }/output/${ a }/${ name }.${ a }`;
 
-					// out += ` && objdump -d -M intel -S ${ BUILD }/${ a }/${ name }.${ a } > ${ BUILD }/${ s }/${ name }.${ s }`;
+					out += ` && objdump -d -M intel -S $(BUILD)/${ ENV }/output/${ a }/${ name }.${ a } > $(BUILD)/${ ENV }/output/${ s }/${ name }.${ s }`;
 
 					this.str += `${ out }\n\n`;
 				};
@@ -308,17 +350,29 @@ module.exports = class Make {
 
 			case MSVS_X64:
 
-				this.linkStatic = (name, objects/*, statics*/) => {
+				this.linkStatic = (name, options = {}) => {
+
+					const objects = options.objects || {};
+					const statics = options.statics || [];
+					const internal = objects.internal || [];
+					const external = objects.external || [];
+
+					const linked_units = [
+
+						`${ internal.map((file) => `$(BUILD)/${ ENV }/internal/${ o }/${ file }.${ o }`).join(' ') }`,
+						`${ external.map((file) => `$(BUILD)/${ ENV }/external/${ o }/${ file }.${ o }`).join(' ') }`,
+						`${ statics.map((file) => `${ file }.${ a }`).join(' ') }`,
+					].join(' ');
 
 					let out = '';
 
-					out += `$(BUILD)/${ ENV }/output/${ a }/${ name }.${ a } : ${ objects.internal ? objects.internal.map((file) => `$(BUILD)/${ ENV }/internal/${ o }/${ file }.${ o }`).join(' ') : '' }\n`;
+					out += `$(BUILD)/${ ENV }/output/${ a }/${ name }.${ a } : ${ linked_units }\n`;
 
-					out += `\t${ mkdir(`$(BUILD)/${ ENV }/output/${ a }`) } && `;
+					out += `\t${ mkdir(`$(BUILD)/${ ENV }/output/${ a }`) } && && ${ mkdir(`$(BUILD)/${ ENV }/output/${ s }`) } && `;
 
-					out += `${ BUILDER } ${ objects.internal ? objects.internal.map((file) => `$(BUILD)/${ ENV }/internal/${ o }/${ file }.${ o }`).join(' ') : '' } ${ BUILDER_ARG } /OUT:$(BUILD)/${ ENV }/output/${ a }/${ name }.${ a }`;
+					out += `${ BUILDER } ${ linked_units } ${ BUILDER_ARG } /OUT:$(BUILD)/${ ENV }/output/${ a }/${ name }.${ a }`;
 
-					// out += ` && dumpbin /disasm ${ BUILD }/${ a }/${ name }.${ a } /out:${ BUILD }/${ s }/${ name }.${ s }`;
+					out += ` && dumpbin /disasm $(BUILD)/${ ENV }/output/${ a }/${ name }.${ a } /out:$(BUILD)/${ ENV }/output/${ s }/${ name }.${ s }`;
 
 					this.str += `${ out }\n\n`;
 				};
@@ -328,16 +382,70 @@ module.exports = class Make {
 
 
 
-		// 				this.linkExe = (NAME, objects, statics) => {
+		switch (ENV) {
 
-		// 					return `
-		// ${ BUILD }/${ bin }/${ NAME }${ bin } : ${ objects.map((name) => `${ BUILD }/${ o }/${ name }.${ o }`).join(' ') } ${ statics.map((name) => `${ BUILD }/${ o }/${ name }.${ o }`).join(' ') }
-		// 	${ makeBuild } && ${ makeA } &&	${ makeS } &&\
-		// 	${ BUILDER } ${ objects.map((name) => `${ BUILD }/${ o }/${ name }.${ o }`).join(' ') } ${ statics.map((name) => `${ BUILD }/${ o }/${ name }.${ o }`).join(' ') } \
-		// 	${ BUILDER_ARG } -o ${ BUILD }/${ bin }/${ NAME }${ bin } &&\
-		// 	objdump -d -M intel -S ${ BUILD }/${ bin }/${ NAME }${ bin } > ${ BUILD }/s/${ NAME }.${ s }
-		// `;
-		// 				};
+			case GCC_X64:
+
+				this.linkBin = (name, options = {}) => {
+
+					const objects = options.objects || {};
+					const statics = options.statics || [];
+					const internal = objects.internal || [];
+					const external = objects.external || [];
+
+					const linked_units = [
+
+						`${ internal.map((file) => `$(BUILD)/${ ENV }/internal/${ o }/${ file }.${ o }`).join(' ') }`,
+						`${ external.map((file) => `$(BUILD)/${ ENV }/external/${ o }/${ file }.${ o }`).join(' ') }`,
+						`${ statics.map((file) => `${ file }.${ a }`).join(' ') }`,
+					].join(' ');
+
+					let out = '';
+
+					out += `$(BUILD)/${ ENV }/output/${ bin }/${ name }.${ bin } : ${ linked_units }\n`;
+
+					out += `\t${ mkdir(`$(BUILD)/${ ENV }/output/${ bin }`) } && `;
+
+					out += `${ LINKER } ${ linked_units } ${ LINKER_DEFAULT_LIBS } ${ LINKER_ARG } -o $(BUILD)/${ ENV }/output/${ bin }/${ name }.${ bin }`;
+
+					out += ` && objdump -d -M intel -S $(BUILD)/${ ENV }/output/${ bin }/${ name }.${ bin } > $(BUILD)/${ ENV }/output/${ s }/${ name }.${ s }`;
+
+					this.str += `${ out }\n\n`;
+				};
+
+				break;
+
+			case MSVS_X64:
+
+				this.linkBin = (name, options = {}) => {
+
+					const objects = options.objects || {};
+					const statics = options.statics || [];
+					const internal = objects.internal || [];
+					const external = objects.external || [];
+
+					const linked_units = [
+
+						`${ internal.map((file) => `$(BUILD)/${ ENV }/internal/${ o }/${ file }.${ o }`).join(' ') }`,
+						`${ external.map((file) => `$(BUILD)/${ ENV }/external/${ o }/${ file }.${ o }`).join(' ') }`,
+						`${ statics.map((file) => `${ file }.${ a }`).join(' ') }`,
+					].join(' ');
+
+					let out = '';
+
+					out += `$(BUILD)/${ ENV }/output/${ bin }/${ name }.${ bin } : ${ linked_units }\n`;
+
+					out += `\t${ mkdir(`$(BUILD)/${ ENV }/output/${ bin }`) } && `;
+
+					out += `${ LINKER } ${ linked_units } ${ LINKER_DEFAULT_LIBS } ${ LINKER_ARG } /OUT:$(BUILD)/${ ENV }/output/${ bin }/${ name }.${ bin }`;
+
+					out += ` && dumpbin /disasm $(BUILD)/${ ENV }/output/${ bin }/${ name }.${ bin } /out:$(BUILD)/${ ENV }/output/${ s }/${ name }.${ s }`;
+
+					this.str += `${ out }\n\n`;
+				};
+
+				break;
+		}
 	}
 
 	cpp_ext (file, headers = []) {
@@ -354,23 +462,29 @@ module.exports = class Make {
 
 		const fs = require('fs');
 
+		const makefiles = `${ this.dirname }/makefiles`;
+
+		const env = `${ makefiles }/${ this.ENV }`;
+
+		const makefile = `${ env }/makefile`;
+
 		this.str = `${ this.str.trim() }\n`;
 
-		if (fs.existsSync(`${ this.dirname }/makefiles`)) {
+		if (fs.existsSync(makefiles)) {
 
-			if (fs.existsSync(`${ this.dirname }/makefiles/${ this.ENV }`)) {
+			if (fs.existsSync(env)) {
 
-				fs.rmdirSync(`${ this.dirname }/makefiles/${ this.ENV }`, { recursive: true });
+				fs.rmdirSync(env, { recursive: true });
 			}
 
-			fs.mkdirSync(`${ this.dirname }/makefiles/${ this.ENV }`);
-			fs.appendFileSync(`${ this.dirname }/makefiles/${ this.ENV }/makefile`, this.str);
+			fs.mkdirSync(env);
+			fs.appendFileSync(makefile, this.str);
 		}
 		else {
 
-			fs.mkdirSync(`${ this.dirname }/makefiles`);
-			fs.mkdirSync(`${ this.dirname }/makefiles/${ this.ENV }`);
-			fs.appendFileSync(`${ this.dirname }/makefiles/${ this.ENV }/makefile`, this.str);
+			fs.mkdirSync(makefiles);
+			fs.mkdirSync(env);
+			fs.appendFileSync(makefile, this.str);
 		}
 	}
 }
