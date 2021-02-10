@@ -26,7 +26,7 @@ class Make {
 
 	static GCC_X64 = 'gcc-x64';
 	static MSVS_X64 = 'msvs-x64';
-	// static EMCC_X64 = 'emcc-x64';
+	static EMCC_X64 = 'emcc-x64';
 
 
 
@@ -102,6 +102,11 @@ class Make {
 		case MSVS_X64:
 
 			s = 'asm';
+			break;
+
+		case EMCC_X64:
+
+			s = 'wat';
 			break;
 
 		default:
@@ -301,7 +306,7 @@ class Make {
 
 		case EMCC_X64:
 
-			bin = 'js';
+			BUILDER_ARG = '';
 			break;
 
 		default:
@@ -325,7 +330,7 @@ class Make {
 
 		case EMCC_X64:
 
-			bin = 'js';
+			LINKER = 'emcc';
 			break;
 
 		default:
@@ -342,12 +347,27 @@ class Make {
 
 		case MSVS_X64:
 
-			LINKER_ARG = '/SUBSYSTEM:CONSOLE /NODEFAULTLIB:LIBUCRT /NODEFAULTLIB:MSVCRT';
+			LINKER_ARG = [
+
+				'/SUBSYSTEM:CONSOLE',
+				'/NODEFAULTLIB:LIBUCRT',
+				'/NODEFAULTLIB:MSVCRT',
+			].join(' ');
 			break;
 
 		case EMCC_X64:
 
-			bin = 'js';
+			LINKER_ARG = [
+
+				'-s WASM=1',
+				'-s SINGLE_FILE=1',
+				'-s MODULARIZE=1',
+				'-s EXPORT_ES6=1',
+				'-s USE_ES6_IMPORT_META=0',
+				'-s ENVIRONMENT=web',
+				'-s EXPORTED_RUNTIME_METHODS=\'["ccall", "cwrap"]\'',
+				'-s ASSERTIONS=1',
+			].join(' ');
 			break;
 
 		default:
@@ -392,6 +412,47 @@ class Make {
 		default:
 		}
 
+
+
+		let MAKE_TOOL_MAKEFILE_ARG = null;
+
+		switch (this.env) {
+
+		case GCC_X64:
+
+			MAKE_TOOL_MAKEFILE_ARG = '-f';
+			break;
+
+		case MSVS_X64:
+
+			MAKE_TOOL_MAKEFILE_ARG = '/F';
+			break;
+
+		case EMCC_X64: {
+
+			switch (process.platform) {
+
+			case 'linux':
+
+				MAKE_TOOL_MAKEFILE_ARG = '-f';
+				break;
+
+			case 'win32':
+
+				MAKE_TOOL_MAKEFILE_ARG = '/F';
+				break;
+
+			default:
+			}
+
+			break;
+		}
+
+		default:
+		}
+
+
+
 		let MAKE_TOOL_ARG = null;
 
 		switch (this.env) {
@@ -408,7 +469,7 @@ class Make {
 
 		case EMCC_X64:
 
-			bin = 'js';
+			MAKE_TOOL_ARG = '';
 			break;
 
 		default:
@@ -460,6 +521,8 @@ class Make {
 
 				let out = '';
 
+				console.log(`\t${ mkdir(`$(BUILD)/${ location }/${ o }/${ dir }`) } && ${ mkdir(`$(BUILD)/${ location }/${ s }/${ dir }`) } && `);
+
 				out += `$(BUILD)/${ location }/${ o }/${ dir }/${ name }.${ o } : ${ dir }/${ base } ${ headers.join(' ') }\n`;
 
 				out += `\t${ mkdir(`$(BUILD)/${ location }/${ o }/${ dir }`) } && ${ mkdir(`$(BUILD)/${ location }/${ s }/${ dir }`) } && `;
@@ -485,7 +548,7 @@ class Make {
 
 				out += `\t${ mkdir(`$(BUILD)/${ location }/${ o }/${ dir }`) } && ${ mkdir(`$(BUILD)/${ location }/${ s }/${ dir }`) } && `;
 
-				out += `${ C_EXT.includes(ext) ? C_COMPILER : CPP_COMPILER } ${ dir }/${ base } ${ C_EXT.includes(ext) ? C_COMPILER_ARG : CPP_COMPILER_ARG } ${ includes_global.map((include) => `-I ${ include }`).join(' ') } ${ includes_local.map((include) => `-I ${ include }`).join(' ') } /Fo$(BUILD)/${ location }/${ o }/${ dir }/${ name }.${ o }`;
+				out += `${ C_EXT.includes(ext) ? C_COMPILER : CPP_COMPILER } ${ dir }/${ base } ${ C_EXT.includes(ext) ? C_COMPILER_ARG : CPP_COMPILER_ARG } ${ includes_global.map((include) => `/I${ include }`).join(' ') } ${ includes_local.map((include) => `/I${ include }`).join(' ') } /Fo$(BUILD)/${ location }/${ o }/${ dir }/${ name }.${ o }`;
 
 				out += ` /FA /Fa$(BUILD)/${ location }/${ s }/${ dir }/${ name }.${ s }`;
 
@@ -494,24 +557,28 @@ class Make {
 
 			break;
 
-			// case EMCC_X64:
+		case EMCC_X64:
 
-			// 	this.cpp = (file, headers = [], location = 'internal') => {
+			this.cpp = (file, headers, includes_global, includes_local, location) => {
 
-			// 		const { dir, base, ext, name } = path.parse(file);
+				const { dir, base, ext, name } = path.parse(file);
 
-			// 		let out = '';
+				let out = '';
 
-			// 		out += `$(BUILD)/${ location }/${ o }/${ dir }/${ name }.${ o } : $(SRC)/${ dir }/${ base } ${ headers.map((header) => header.replace(`${ this.dirname }/src`, '$(SRC)').replace(`${ this.dirname }/build`, '$(BUILD)')).join(' ') }\n`;
+				console.log(`\t${ mkdir(`$(BUILD)/${ location }/${ o }/${ dir }`) } && ${ mkdir(`$(BUILD)/${ location }/${ s }/${ dir }`) } && `);
 
-			// 		out += `\t${ mkdir(`$(BUILD)/${ location }/${ o }/${ dir }`) } && ${ mkdir(`$(BUILD)/${ location }/${ s }/${ dir }`) } && `;
+				out += `$(BUILD)/${ location }/${ o }/${ dir }/${ name }.${ o } : ${ dir }/${ base } ${ headers.join(' ') }\n`;
 
-			// 		out += `${ C_EXT.includes(ext) ? C_COMPILER : CPP_COMPILER } $(SRC)/${ dir }/${ base } ${ C_EXT.includes(ext) ? C_COMPILER_ARG : CPP_COMPILER_ARG } -o $(BUILD)/${ location }/${ o }/${ dir }/${ name }.${ o }`;
+				out += `\t${ mkdir(`$(BUILD)/${ location }/${ o }/${ dir }`) } && ${ mkdir(`$(BUILD)/${ location }/${ s }/${ dir }`) } && `;
 
-			// 		this.str += `${ out }\n\n`;
-			// 	};
+				out += `${ C_EXT.includes(ext) ? C_COMPILER : CPP_COMPILER } ${ dir }/${ base } ${ C_EXT.includes(ext) ? C_COMPILER_ARG : CPP_COMPILER_ARG } ${ includes_global.map((include) => `-I ${ include }`).join(' ') } ${ includes_local.map((include) => `-I ${ include }`).join(' ') } -o $(BUILD)/${ location }/${ o }/${ dir }/${ name }.${ o }`;
 
-			// 	break;
+				// out += ` && objdump -d -M intel -S $(BUILD)/${ location }/${ o }/${ dir }/${ name }.${ o } > $(BUILD)/${ location }/${ s }/${ dir }/${ name }.${ s }`;
+
+				this.str += `${ out }\n\n`;
+			};
+
+			break;
 
 		default:
 		}
@@ -566,20 +633,7 @@ class Make {
 		switch (this.env) {
 
 		case GCC_X64:
-
-			this.static = (name, files = [], makefile) => {
-
-				let out = '';
-
-				out += `${ name }.${ a } : ${ files.join(' ') }\n`;
-
-				out += `\t${ MAKE_TOOL } ${ MAKE_TOOL_ARG } -f ${ makefile }`;
-
-				this.str += `${ out }\n\n`;
-			};
-
-			break;
-
+		case EMCC_X64:
 		case MSVS_X64:
 
 			this.static = (name, files = [], makefile) => {
@@ -588,14 +642,10 @@ class Make {
 
 				out += `${ name }.${ a } : ${ files.join(' ') }\n`;
 
-				out += `\t${ MAKE_TOOL } ${ MAKE_TOOL_ARG } /F ${ makefile }`;
+				out += `\t${ MAKE_TOOL } ${ MAKE_TOOL_ARG } ${ MAKE_TOOL_MAKEFILE_ARG } ${ makefile }`;
 
 				this.str += `${ out }\n\n`;
 			};
-
-			break;
-
-		case EMCC_X64:
 
 			break;
 
@@ -735,33 +785,35 @@ class Make {
 
 			break;
 
-			// case EMCC_X64:
+		case EMCC_X64:
 
-			// 	this.cpp = (name, _options) => {
+			this.linkBin = (target, _options) => {
 
-			// 		const statics = _options?.statics;
-			// 		const internal = _options?.objects?.internal;
-			// 		const external = _options?.objects?.external;
+				const statics = makeArray(_options?.statics);
+				const objects_internal = makeArray(_options?.objects?.internal);
+				const objects_external = makeArray(_options?.objects?.external);
 
-			// 		const linked_units = [
+				const linked_units = [
 
-			// 			`${ internal.map((file) => `$(BUILD)/internal/${ o }/${ file }.${ o }`).join(' ') }`,
-			// 			`${ external.map((file) => `$(BUILD)/external/${ o }/${ file }.${ o }`).join(' ') }`,
-			// 			`${ statics.map((file) => `${ file }.${ a }`).join(' ') }`,
-			// 		].join(' ');
+					`${ objects_internal.map((file) => `$(BUILD)/internal/${ o }/${ file }.${ o }`).join(' ') }`,
+					`${ objects_external.map((file) => `$(BUILD)/external/${ o }/${ file }.${ o }`).join(' ') }`,
+					`${ statics.map((file) => `${ file }.${ a }`).join(' ') }`,
+				].join(' ');
 
-			// 		let out = '';
+				let out = '';
 
-			// 		out += `$(BUILD)/output/${ bin }/${ name }.${ bin } : ${ linked_units }\n`;
+				out += `$(BUILD)/output/${ bin }/${ target }.${ bin } : ${ linked_units }\n`;
 
-			// 		out += `\t${ mkdir(`$(BUILD)/output/${ bin }`) } && `;
+				out += `\t${ mkdir(`$(BUILD)/output/${ bin }`) } && `;
 
-			// 		out += `${ LINKER } ${ linked_units } ${ LINKER_ARG } -o $(BUILD)/output/${ bin }/${ name }.${ bin }`;
+				out += `${ LINKER } ${ linked_units } ${ LINKER_ARG } -o $(BUILD)/output/${ bin }/${ target }.${ bin }`;
 
-			// 		this.str += `${ out }\n\n`;
-			// 	};
+				// out += ` && objdump -d -M intel -S $(BUILD)/output/${ bin }/${ target }.${ bin } > $(BUILD)/output/${ s }/${ target }.${ s }`;
 
-			// 	break;
+				this.str = `${ out }\n\n${ this.str }`;
+			};
+
+			break;
 
 		default:
 		}
@@ -799,6 +851,8 @@ class Make {
 					else if (typeof file === 'object') {
 
 						const { dir, name } = path.parse(file.source);
+
+						console.log(file.source);
 
 						objects[location].push(`${ dir }/${ name }`);
 
@@ -1023,7 +1077,13 @@ class Make {
 
 		const makefile = `${ env }/makefile`;
 
-		this.str = `${ this.str.trim().replace(/( )+/g, ' ').replace(/(\/)+/g, '/').replace(/\/\$\(SRC\)\//g, '/') }\n`;
+		this.str = `${ this.str.trim().replace(/( )+/g, ' ').replace(/(\/)+/g, '/').replace(/\/\$\(SRC\)\//g, '/').replace(/\/\$\(SRC\) /g, ' ') }\n`;
+
+		// remove build folder
+		if (fs.existsSync(`${ this.dirname }/build/${ this.env }`)) {
+
+			fs.rmdirSync(`${ this.dirname }/build/${ this.env }`, { recursive: true });
+		}
 
 		if (fs.existsSync(makefiles)) {
 
