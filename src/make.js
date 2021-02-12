@@ -214,7 +214,7 @@ class Make {
 
 		case EMCC_X64:
 
-			C_COMPILER_ARG = '-c -O3 -msimd128 -msse';
+			C_COMPILER_ARG = '-c -O3 -msimd128 -msse -Wall -Wextra -Wpedantic';
 			break;
 
 		default:
@@ -260,7 +260,7 @@ class Make {
 
 		case EMCC_X64:
 
-			CPP_COMPILER_ARG = '-c -std=c++20 -O3 -msimd128 -msse';
+			CPP_COMPILER_ARG = '-c -std=c++20 -O3 -msimd128 -msse -Wall -Wextra -Wpedantic';
 			break;
 
 		default:
@@ -359,6 +359,7 @@ class Make {
 
 			LINKER_ARG = [
 
+				'--bind',
 				'-s WASM=1',
 				'-s SINGLE_FILE=1',
 				'-s MODULARIZE=1',
