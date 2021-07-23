@@ -16,6 +16,10 @@ const fs = require('fs');
 
 
 
+const LOG = console.log.bind(console);
+
+
+
 const C_EXT = [ '.c' ];
 // const CPP_EXT = [ '.cpp' ];
 
@@ -60,8 +64,13 @@ class Make
 		switch (this.env)
 		{
 		case GCC_X64:
-		case EMCC_X64:
 		case LLVM_WASM_X64:
+
+			a = 'a';
+
+			break;
+
+		case EMCC_X64:
 
 			a = 'a';
 
@@ -519,13 +528,13 @@ class Make
 			{
 			case 'linux':
 
-				MAKE_TOOL = 'make';
+				MAKE_TOOL = 'emmake make';
 
 				break;
 
 			case 'win32':
 
-				MAKE_TOOL = 'nmake';
+				MAKE_TOOL = 'emmake nmake';
 
 				break;
 
@@ -851,10 +860,8 @@ class Make
 		switch (this.env)
 		{
 		case GCC_X64:
-		case EMCC_X64:
-		case LLVM_WASM_X64:
 
-			this.linkStatic = (name, _options) =>
+			this.linkStatic = (target_name, _options) =>
 			{
 				const static_libraries = makeArray(_options?.static_libraries);
 				const source_files_internal = makeArray(_options?.source_files?.internal);
@@ -869,13 +876,13 @@ class Make
 
 				let out = '';
 
-				out += `$(BUILD)/output/${ a }/${ name }.${ a } : ${ linked_units }\n`;
+				out += `$(BUILD)/output/${ a }/${ target_name }.${ a } : ${ linked_units }\n`;
 
 				out += `\t${ mkdir(`$(BUILD)/output/${ a }`) } && ${ mkdir(`$(BUILD)/output/${ s }`) } && `;
 
-				out += `${ BUILDER } ${ linked_units } ${ BUILDER_ARG } -o $(BUILD)/output/${ a }/${ name }.${ a }`;
+				out += `${ BUILDER } ${ linked_units } ${ BUILDER_ARG } -o $(BUILD)/output/${ a }/${ target_name }.${ a }`;
 
-				out += ` && objdump -d -M intel -S $(BUILD)/output/${ a }/${ name }.${ a } > $(BUILD)/output/${ s }/${ name }.${ s }`;
+				out += ` && objdump -d -M intel -S $(BUILD)/output/${ a }/${ target_name }.${ a } > $(BUILD)/output/${ s }/${ target_name }.${ s }`;
 
 				// this.str += `${ out }\n\n`;
 				this.str = `${ out }\n\n${ this.str }`;
@@ -907,6 +914,70 @@ class Make
 				out += `${ BUILDER } ${ linked_units } ${ BUILDER_ARG } /OUT:$(BUILD)/output/${ a }/${ target_name }.${ a }`;
 
 				out += ` && dumpbin /disasm $(BUILD)/output/${ a }/${ target_name }.${ a } /out:$(BUILD)/output/${ s }/${ target_name }.${ s }`;
+
+				// this.str += `${ out }\n\n`;
+				this.str = `${ out }\n\n${ this.str }`;
+			};
+
+			break;
+
+		case EMCC_X64:
+
+			this.linkStatic = (target_name, _options) =>
+			{
+				const static_libraries = makeArray(_options?.static_libraries);
+				const source_files_internal = makeArray(_options?.source_files?.internal);
+				const source_files_external = makeArray(_options?.source_files?.external);
+
+				const linked_units =
+				[
+					`${ source_files_internal.map((file) => `$(BUILD)/internal/${ o }/${ file }.${ o }`).join(' ') }`,
+					`${ source_files_external.map((file) => `$(BUILD)/external/${ o }/${ file }.${ o }`).join(' ') }`,
+					`${ static_libraries.map((file) => `${ file }.${ a }`).join(' ') }`,
+				].join(' ');
+
+				let out = '';
+
+				out += `$(BUILD)/output/${ a }/${ target_name }.${ a } : ${ linked_units }\n`;
+
+				// out += `\t${ mkdir(`$(BUILD)/output/${ a }`) } && ${ mkdir(`$(BUILD)/output/${ s }`) } && `;
+				out += `\t${ mkdir(`$(BUILD)/output/${ a }`) } && `;
+
+				out += `${ BUILDER } ${ linked_units } ${ BUILDER_ARG } -o $(BUILD)/output/${ a }/${ target_name }.${ a }`;
+
+				// out += ` && objdump -d -M intel -S $(BUILD)/output/${ a }/${ target_name }.${ a } > $(BUILD)/output/${ s }/${ target_name }.${ s }`;
+
+				// this.str += `${ out }\n\n`;
+				this.str = `${ out }\n\n${ this.str }`;
+			};
+
+			break;
+
+		case LLVM_WASM_X64:
+
+			this.linkStatic = (target_name, _options) =>
+			{
+				const static_libraries = makeArray(_options?.static_libraries);
+				const source_files_internal = makeArray(_options?.source_files?.internal);
+				const source_files_external = makeArray(_options?.source_files?.external);
+
+				const linked_units =
+				[
+					`${ source_files_internal.map((file) => `$(BUILD)/internal/${ o }/${ file }.${ o }`).join(' ') }`,
+					`${ source_files_external.map((file) => `$(BUILD)/external/${ o }/${ file }.${ o }`).join(' ') }`,
+					`${ static_libraries.map((file) => `${ file }.${ a }`).join(' ') }`,
+				].join(' ');
+
+				let out = '';
+
+				out += `$(BUILD)/output/${ a }/${ target_name }.${ a } : ${ linked_units }\n`;
+
+				out += `\t${ mkdir(`$(BUILD)/output/${ a }`) } && ${ mkdir(`$(BUILD)/output/${ s }`) } && `;
+				out += `\t${ mkdir(`$(BUILD)/output/${ a }`) } && `;
+
+				out += `${ BUILDER } ${ linked_units } ${ BUILDER_ARG } -o $(BUILD)/output/${ a }/${ target_name }.${ a }`;
+
+				out += ` && wasm-decompile $(BUILD)/output/${ a }/${ target_name }.${ a } -o $(BUILD)/output/${ s }/${ target_name }.${ s }`;
 
 				// this.str += `${ out }\n\n`;
 				this.str = `${ out }\n\n${ this.str }`;
@@ -1313,11 +1384,11 @@ class Make
 
 		this.str = `${ this.str.trim().replace(/( )+/g, ' ').replace(/(\/)+/g, '/').replace(/\/\$\(SRC\)\//g, '/').replace(/\/\$\(SRC\) /g, ' ') }\n`;
 
-		// remove build folder
-		if (fs.existsSync(`${ this.dirname }/build/${ this.env }`))
-		{
-			fs.rmdirSync(`${ this.dirname }/build/${ this.env }`, { recursive: true });
-		}
+		// // remove build folder
+		// if (fs.existsSync(`${ this.dirname }/build/${ this.env }`))
+		// {
+		// 	fs.rmdirSync(`${ this.dirname }/build/${ this.env }`, { recursive: true });
+		// }
 
 		if (fs.existsSync(makefiles))
 		{
@@ -1325,16 +1396,14 @@ class Make
 			{
 				fs.rmdirSync(env, { recursive: true });
 			}
-
-			fs.mkdirSync(env);
-			fs.appendFileSync(makefile, this.str);
 		}
 		else
 		{
 			fs.mkdirSync(makefiles);
-			fs.mkdirSync(env);
-			fs.appendFileSync(makefile, this.str);
 		}
+
+		fs.mkdirSync(env);
+		fs.appendFileSync(makefile, this.str);
 	}
 }
 
