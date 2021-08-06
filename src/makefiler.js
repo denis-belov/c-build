@@ -1121,11 +1121,11 @@ class Make
 
 							source_files[location].push(`${ dir }/${ name }`);
 
-							this.cpp(file.source, makeArray(file.options?.headers), include_directories, makeArray(file.options?.include_directories), location, file.options?.flags);
+							this.cpp(file.source, makeArray(file.headers), include_directories, makeArray(file.include_directories), location, file.flags);
 
-							if (file.options?.custom_dependencies)
+							if (file.custom_dependencies)
 							{
-								const custom = makeArray(file.options.custom_dependencies);
+								const custom = makeArray(file.custom_dependencies);
 
 								custom.forEach(
 
@@ -1164,9 +1164,9 @@ class Make
 
 							this.asm(file.source, location);
 
-							if (file.options?.custom_dependencies)
+							if (file.custom_dependencies)
 							{
-								const custom = makeArray(file.options.custom_dependencies);
+								const custom = makeArray(file.custom_dependencies);
 
 								custom.forEach(
 
@@ -1263,6 +1263,7 @@ class Make
 							{
 								// console.log(_file);
 
+								// SOLVE DUPLICATING FILES PROBLEM !
 								if (!ff.includes(_file.source))
 								{
 									// ff.push();
@@ -1285,9 +1286,9 @@ class Make
 									ff.push(qwe);
 								}
 
-								if (_file.options?.headers)
+								if (_file.headers)
 								{
-									const headers = makeArray(_file.options?.headers);
+									const headers = makeArray(_file.headers);
 
 									headers.forEach(
 
