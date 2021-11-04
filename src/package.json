@@ -1,0 +1,12 @@
+{
+  "name": "genmake",
+  "version": "0.0.1",
+  "description": "Makefile generator",
+  "main": "./index.js",
+  "bin": {
+    "genmake": "./index.js"
+  },
+  "preferGlobal": true,
+  "author": "Denis Belov",
+  "license": "MIT"
+}
